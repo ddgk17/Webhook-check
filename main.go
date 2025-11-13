@@ -1,9 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 func main() {
 	fmt.Println("Hello world")
 	a := 10
-	b := INT_MAX
+	b := math.MaxInt
+	fmt.Println(a, b)
 }
