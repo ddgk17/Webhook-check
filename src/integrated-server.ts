@@ -14,10 +14,7 @@ import { GitHubMCPClient } from "./mcp-client.js";
 import { PR_ANALYSIS_RULES } from "./rules.js";
 
 // Initialize MCP client for GitHub
-const githubMCPClient = new GitHubMCPClient({
-  command: "gh",
-  args: ["api", "graphql"],
-});
+const githubMCPClient = new GitHubMCPClient();
 
 const analyzer = new IntegratedPRAnalyzer(githubMCPClient);
 
