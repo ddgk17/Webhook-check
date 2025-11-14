@@ -1,5 +1,16 @@
 import { PR_ANALYSIS_RULES, AnalysisResult } from "./rules.js";
-import { GitHubMCPClient } from "./mcp-client.js";
+
+export interface GitHubClient {
+  fetchPRDetails(owner: string, repo: string, prNumber: number): Promise<any>;
+  fetchPRFiles(owner: string, repo: string, prNumber: number): Promise<any[]>;
+  fetchPRCommits(owner: string, repo: string, prNumber: number): Promise<any[]>;
+  createComment(
+    owner: string,
+    repo: string,
+    prNumber: number,
+    body: string
+  ): Promise<any>;
+}
 
 export interface PRData {
   number: number;
@@ -27,10 +38,10 @@ export interface Commit {
 }
 
 export class IntegratedPRAnalyzer {
-  private mcpClient: GitHubMCPClient;
+  private client: GitHubClient;
 
-  constructor(mcpClient: GitHubMCPClient) {
-    this.mcpClient = mcpClient;
+  constructor(client: GitHubClient) {
+    this.client = client;
   }
 
   async fetchAndAnalyzePR(
@@ -39,13 +50,13 @@ export class IntegratedPRAnalyzer {
     prNumber: number
   ): Promise<AnalysisResult> {
     try {
-      // Fetch data using MCP tools
-      const prDetails = await this.mcpClient.fetchPRDetails(owner, repo, prNumber);
-      const prFiles = await this.mcpClient.fetchPRFiles(owner, repo, prNumber);
-      const prCommits = await this.mcpClient.fetchPRCommits(owner, repo, prNumber);
+      // Fetch data using GitHub client
+      const prDetails = await this.client.fetchPRDetails(owner, repo, prNumber);
+      const prFiles = await this.client.fetchPRFiles(owner, repo, prNumber);
+      const prCommits = await this.client.fetchPRCommits(owner, repo, prNumber);
 
-      // Convert MCP responses to PRData format
-      const prData = this.convertMCPResponseToPRData(
+      // Convert responses to PRData format
+      const prData = this.convertToPRData(
         prDetails,
         prFiles,
         prCommits,
@@ -70,7 +81,7 @@ export class IntegratedPRAnalyzer {
   ): Promise<void> {
     const comment = this.formatAnalysisComment(analysis);
     try {
-      await this.mcpClient.createComment(owner, repo, prNumber, comment);
+      await this.client.createComment(owner, repo, prNumber, comment);
       console.log(`Posted analysis comment on PR #${prNumber}`);
     } catch (error) {
       console.error(`Error posting comment: ${error}`);
@@ -301,15 +312,15 @@ export class IntegratedPRAnalyzer {
     return secretPatterns.some((pattern) => pattern.test(patch));
   }
 
-  private convertMCPResponseToPRData(
+  private convertToPRData(
     prDetails: any,
-    prFiles: any,
-    prCommits: any,
+    prFiles: any[],
+    prCommits: any[],
     owner: string,
     repo: string,
     prNumber: number
   ): PRData {
-    const files: PRFile[] = (prFiles.files || []).map((file: any) => ({
+    const files: PRFile[] = prFiles.map((file) => ({
       name: file.filename,
       changes: file.changes,
       additions: file.additions,
@@ -318,7 +329,7 @@ export class IntegratedPRAnalyzer {
       status: file.status,
     }));
 
-    const commits: Commit[] = (prCommits.commits || []).map((commit: any) => ({
+    const commits: Commit[] = prCommits.map((commit) => ({
       message: commit.commit.message,
       filesChanged: commit.files?.length || 0,
       sha: commit.sha,
@@ -326,8 +337,8 @@ export class IntegratedPRAnalyzer {
 
     return {
       number: prNumber,
-      title: prDetails.pull_request?.title || "",
-      description: prDetails.pull_request?.body || "",
+      title: prDetails.title || "",
+      description: prDetails.body || "",
       files,
       commits,
       owner,

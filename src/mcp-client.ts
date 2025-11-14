@@ -8,7 +8,7 @@ import {
 export interface StdioClientTransportOptions {
   command: string;
   args?: string[];
-  env?: Record<string, string>;
+  env?: Record<string, string | undefined>;
 }
 
 export class GitHubMCPClient {
@@ -17,7 +17,30 @@ export class GitHubMCPClient {
   private isConnected: boolean = false;
 
   constructor(options: StdioClientTransportOptions) {
-    this.transport = new StdioClientTransport(options);
+    // Set up environment with GITHUB_TOKEN if available
+    const env: Record<string, string | undefined> = {
+      ...process.env,
+      ...options.env,
+    };
+    
+    // If GITHUB_TOKEN is set, ensure GH_TOKEN is also set for gh CLI
+    if (process.env.GITHUB_TOKEN && !env.GH_TOKEN) {
+      env.GH_TOKEN = process.env.GITHUB_TOKEN;
+    }
+
+    // Filter out undefined values for transport
+    const cleanEnv: Record<string, string> = {};
+    for (const [key, value] of Object.entries(env)) {
+      if (value !== undefined) {
+        cleanEnv[key] = value;
+      }
+    }
+
+    this.transport = new StdioClientTransport({
+      ...options,
+      env: cleanEnv,
+    });
+    
     this.client = new Client(
       {
         name: "pr-analyzer-client",
@@ -70,7 +93,7 @@ export class GitHubMCPClient {
     owner: string,
     repo: string,
     prNumber: number
-  ): Promise<unknown> {
+  ): Promise<any> {
     return this.callTool("github/get_pull_request", {
       owner,
       repo,
@@ -82,24 +105,24 @@ export class GitHubMCPClient {
     owner: string,
     repo: string,
     prNumber: number
-  ): Promise<unknown> {
+  ): Promise<any[]> {
     return this.callTool("github/list_pull_request_files", {
       owner,
       repo,
       pull_number: prNumber,
-    });
+    }) as Promise<any[]>;
   }
 
   async fetchPRCommits(
     owner: string,
     repo: string,
     prNumber: number
-  ): Promise<unknown> {
+  ): Promise<any[]> {
     return this.callTool("github/list_pull_request_commits", {
       owner,
       repo,
       pull_number: prNumber,
-    });
+    }) as Promise<any[]>;
   }
 
   async createComment(
@@ -107,8 +130,8 @@ export class GitHubMCPClient {
     repo: string,
     prNumber: number,
     body: string
-  ): Promise<unknown> {
-    return this.callTool("github/create_issue_comment", {
+  ): Promise<void> {
+    await this.callTool("github/create_issue_comment", {
       owner,
       repo,
       issue_number: prNumber,
@@ -116,4 +139,5 @@ export class GitHubMCPClient {
     });
   }
 }
+
 

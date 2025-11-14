@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { IntegratedPRAnalyzer } from "./integrated-analyzer.js";
-import { GitHubMCPClient } from "./mcp-client.js";
+import { GitHubOctokitClient } from "./github-octokit-client.js";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -22,19 +22,19 @@ async function main() {
   }
 
   try {
-    const client = new GitHubMCPClient({
-      command: "gh",
-      args: ["api", "graphql"],
-    });
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) {
+      console.error("Error: GITHUB_TOKEN environment variable is not set");
+      process.exit(1);
+    }
+
+    const client = new GitHubOctokitClient(token);
 
     const analyzer = new IntegratedPRAnalyzer(client);
 
     console.log(`\n🔍 PR Analyzer for ${owner}/${repo}#${prNumber}\n`);
 
     if (action === "post" || action === "both") {
-      console.log("Connecting to GitHub MCP Server...");
-      await client.connect();
-
       console.log("Analyzing PR...");
       const analysis = await analyzer.fetchAndAnalyzePR(owner, repo, prNumber);
 
@@ -44,19 +44,13 @@ async function main() {
       console.log("\nPosting comment to PR...");
       await analyzer.postAnalysisComment(owner, repo, prNumber, analysis);
 
-      await client.disconnect();
       console.log("\n✅ Comment posted successfully!");
     } else {
-      console.log("Connecting to GitHub MCP Server...");
-      await client.connect();
-
       console.log("Analyzing PR...");
       const analysis = await analyzer.fetchAndAnalyzePR(owner, repo, prNumber);
 
       console.log("\n📊 Analysis Results:");
       console.log(JSON.stringify(analysis, null, 2));
-
-      await client.disconnect();
     }
   } catch (error) {
     console.error("❌ Error:", error);

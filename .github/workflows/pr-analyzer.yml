@@ -33,13 +33,9 @@ jobs:
           node -e "
           import('./dist/integrated-analyzer.js').then(async (m) => {
             const { IntegratedPRAnalyzer } = m;
-            const { GitHubMCPClient } = await import('./dist/mcp-client.js');
+            const { GitHubOctokitClient } = await import('./dist/github-octokit-client.js');
             
-            const client = new GitHubMCPClient({
-              command: 'gh',
-              args: ['api', 'graphql']
-            });
-            
+            const client = new GitHubOctokitClient(process.env.GITHUB_TOKEN || '');
             const analyzer = new IntegratedPRAnalyzer(client);
             const pr = ${{ github.event.pull_request.number }};
             const owner = '${{ github.repository_owner }}';
@@ -47,12 +43,15 @@ jobs:
             
             console.log('Starting PR analysis for:', owner + '/' + repo + '#' + pr);
             
-            await client.connect();
-            const analysis = await analyzer.fetchAndAnalyzePR(owner, repo, pr);
-            console.log('Analysis complete. Posting comment...');
-            await analyzer.postAnalysisComment(owner, repo, pr, analysis);
-            await client.disconnect();
-            
-            console.log('✅ PR analysis and comment posted successfully!');
+            try {
+              const analysis = await analyzer.fetchAndAnalyzePR(owner, repo, pr);
+              console.log('Analysis complete. Posting comment...');
+              await analyzer.postAnalysisComment(owner, repo, pr, analysis);
+              console.log('✅ PR analysis and comment posted successfully!');
+            } catch (error) {
+              console.error('❌ Error during PR analysis:', error);
+              process.exit(1);
+            }
           });
           "
+
