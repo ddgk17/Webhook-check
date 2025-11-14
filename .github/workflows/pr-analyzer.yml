@@ -1,0 +1,58 @@
+name: PR Analyzer Integrated
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  analyze-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Analyze PR and Post Comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node -e "
+          import('./dist/integrated-analyzer.js').then(async (m) => {
+            const { IntegratedPRAnalyzer } = m;
+            const { GitHubMCPClient } = await import('./dist/mcp-client.js');
+            
+            const client = new GitHubMCPClient({
+              command: 'gh',
+              args: ['api', 'graphql']
+            });
+            
+            const analyzer = new IntegratedPRAnalyzer(client);
+            const pr = ${{ github.event.pull_request.number }};
+            const owner = '${{ github.repository_owner }}';
+            const repo = '${{ github.event.repository.name }}';
+            
+            console.log('Starting PR analysis for:', owner + '/' + repo + '#' + pr);
+            
+            await client.connect();
+            const analysis = await analyzer.fetchAndAnalyzePR(owner, repo, pr);
+            console.log('Analysis complete. Posting comment...');
+            await analyzer.postAnalysisComment(owner, repo, pr, analysis);
+            await client.disconnect();
+            
+            console.log('✅ PR analysis and comment posted successfully!');
+          });
+          "
